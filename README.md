@@ -46,7 +46,24 @@
 |—— images    # 图片
 ```
 
-## 项目
+## `control`
+
+实现控制电机,舵机等模块
+
+### 01_L298N电机
+
+接线
+ESP32 - L298N
+IO13    ENA
+IO12    INT
+IO14    INT2
+
+电机模块可以使用单独电源,`dcmotor.py`为电机驱动程序,`main.py`为主程序
+
+
+## `examples`
+
+一些比较完整的项目
 
 ### `weather_show`
 
