@@ -29,9 +29,9 @@ def fun(tim):
 	value=Light.read() #获取ADC数值
 
     #显示数值
- 	oled.text(str(value)+' (4095)',0,40)
+	oled.text(str(value)+' (4095)',0,40)
  	#计算电压值，获得的数据0-4095相当于0-3.3V，（'%.2f'%）表示保留2位小数
- 	oled.text(str('%.2f'%(value/4095*3.3))+' V',0,55)
+	oled.text(str('%.2f'%(value/4095*3.3))+' V',0,55)
 
 	#判断光照强度，分3档显示。
 	if 0 < value <=1365:
@@ -43,7 +43,7 @@ def fun(tim):
 	if 2730 < value <= 4095:
 		oled.text('Weak  ', 60, 55)
 
- 	oled.show()
+	oled.show()
 
 #开启RTOS定时器
 tim = Timer(-1)
