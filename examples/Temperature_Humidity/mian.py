@@ -1,89 +1,122 @@
 """
-MicroPython IoT Weather Station Example for Wokwi.com
-
-To view the data:
-
-1. Go to http://www.hivemq.com/demos/websocket-client/
-2. Click "Connect"
-3. Under Subscriptions, click "Add New Topic Subscription"
-4. In the Topic field, type "wokwi-weather" then click "Subscribe"
-
-Now click on the DHT22 sensor in the simulation,
-change the temperature/humidity, and you should see
-the message appear on the MQTT Broker, in the "Messages" pane.
-
-Copyright (C) 2022, Uri Shaked
-
-https://wokwi.com/arduino/projects/322577683855704658
+通过温湿度传感器获取环境温度和湿度信息
+MQTT发布消息
+在OLED屏显示温湿度数据及消息发布状态
 """
 
 import network
 import time
-from machine import Pin,I2C
+from machine import Pin,I2C,Timer
 import dht
 import ujson
-from umqtt.simple import MQTTClient
+from simple import MQTTClient
 from ssd1306 import SSD1306_I2C
 
+# 参数
+WIFI_NAME = '601'
+WIFI_PWD = '1024601666'
 
-# MQTT Server Parameters
-MQTT_CLIENT_ID = "micropython-weather-demo"
-MQTT_BROKER        = "broker.mqttdashboard.com"
-MQTT_USER            = ""
-MQTT_PASSWORD    = ""
-MQTT_TOPIC         = "wokwi-weather"
+MQTT_CLIENT_ID = 'ESP32_0001'
+MQTT_BROKER = '192.168.31.99'
+MQTT_PORT = '1883'
+MQTT_USER = ""
+MQTT_PASSWORD = ""
+MQTT_TOPIC = 'massage/environment'
 
-# 初始化温湿度传感器
-sensor = dht.DHT22(Pin(15))
+# 初始化蓝色板载灯
+LED_BLUE=Pin(2, Pin.OUT) #初始化WIFI指示灯
 
-#初始化相关模块
-i2c = I2C(sda=Pin(13), scl=Pin(12))
-oled = SSD1306_I2C(128, 64, i2c, addr=0x3c)
+# 初始化DTH22
+DHT = dht.DHT22(Pin(15))
+time.sleep(1)
 
-# 连接wifi
-print("Connecting to WiFi", end="")
-sta_if = network.WLAN(network.STA_IF)
-sta_if.active(True)
-sta_if.connect('Wokwi-GUEST', '')
-while not sta_if.isconnected():
-    print(".", end="")
-    time.sleep(0.1)
-print(" Connected!")
+# 初始化oled屏
+# i2c = I2C(sda=Pin(13), scl=Pin(12))
+# oled = SSD1306_I2C(128, 64, i2c, addr=0x3c)
 
-# 连接MQTT服务器
-print("Connecting to MQTT server... ", end="")
-client = MQTTClient(MQTT_CLIENT_ID, MQTT_BROKER, 
-                                        user=MQTT_USER, password=MQTT_PASSWORD)
-client.connect()
-print("Connected!")
 
-prev_weather = ""
-while True:
-    print("Measuring weather conditions... ", end="")
-    sensor.measure() 
-    message = ujson.dumps({
-        "temp": sensor.temperature(),
-        "humidity": sensor.humidity(),
-    })
+def WIFI_Connect():
+    """WIFI连接函数
     
-    # 屏幕显示温湿度
-    oled.fill(0)
-    oled.text('temp: ' + str(sensor.temperature()), 0, 0)
-    oled.text('humidity:' + str(sensor.humidity()), 0, 20)
+    蓝灯闪烁-正在尝试连接
+    蓝灯常量-连接成功
+    蓝灯常闭-连接超时
+    """
+    wlan = network.WLAN(network.STA_IF) #STA模式
+    wlan.active(True)                   #激活接口
+    start_time=time.time()              #记录时间做超时判断
 
-    # 如果与上次数值则不发送
-    if message != prev_weather:
-        print("Updated!")
-        print("Reporting to MQTT topic {}: {}".format(MQTT_TOPIC, message))
-        client.publish(MQTT_TOPIC, message)
-        prev_weather = message
+    if not wlan.isconnected():
+        print('connecting to network...')
+        # wlan.connect('cpst', 'cpstzykj')
+        wlan.connect(WIFI_NAME, WIFI_PWD)
+
+        while not wlan.isconnected():
+
+            #LED闪烁提示
+            LED_BLUE.value(1)
+            time.sleep_ms(300)
+            LED_BLUE.value(0)
+            time.sleep_ms(300)
+
+            #超时判断,10秒没连接成功判定为超时
+            if time.time()-start_time > 10:
+                print('WIFI Connected Timeout!')
+                break
+
+    if wlan.isconnected():
+        LED_BLUE.value(0)
+        print('WIFI Connected:', wlan.ifconfig())
+
+
+def MQTT_connect():
+    """连接mqt"""
+    global mqttclient
+    
+    mqttclient = MQTTClient(MQTT_CLIENT_ID, MQTT_BROKER, MQTT_PORT)
+    mqttclient.connect()
+    print('MQTT connected')
+
+
+def publish_temp(tim):
+    # 读取温湿度数据
+    DHT.measure()
+    temp, hum = DHT.temperature(), DHT.humidity()
+    
+    # 像主题发送数据
+    message = ujson.dumps({
+        "temp": temp,
+        "hum": hum,
+    })
+    try:
+        mqttclient.publish(MQTT_TOPIC, message)
         publish_status = 'True'
-    else:
-        print("No change")
+        print('publish success')
+        
+        # 亮灯1s
+        LED_BLUE.value(1)
+        time.sleep(1)
+        LED_BLUE.value(0)
+    except:
         publish_status = 'False'
+        print('publish failed')
 
-    # 显示发送状态
-    oled.text('Published:' + str(publish_status), 0, 38)
-    oled.show()
+    # 屏幕显示温湿度及发送状态
+    # oleDHT.fill(0)
+    # oleDHT.text('temp: ' + str(temp), 0, 0)
+    # oleDHT.text('humidity:' + str(hum), 0, 20)
+    # oleDHT.text('Published:' + str(publish_status), 0, 38)
+    # oleDHT.show()
 
-    time.sleep(1)
+
+if __name__ == '__main__':
+    # 连接wifi
+    WIFI_Connect()
+    
+    # 连接MQTT
+    MQTT_connect()
+
+    # 定时器
+    tim = Timer(-1)
+    publish_temp(tim)
+    tim.init(period=5000, mode=Timer.PERIODIC,callback=publish_temp)
