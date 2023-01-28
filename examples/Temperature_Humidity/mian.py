@@ -119,4 +119,4 @@ if __name__ == '__main__':
     # 定时器
     tim = Timer(-1)
     publish_temp(tim)
-    tim.init(period=5000, mode=Timer.PERIODIC,callback=publish_temp)
+    # tim.init(period=30000, mode=Timer.PERIODIC,callback=publish_temp)
