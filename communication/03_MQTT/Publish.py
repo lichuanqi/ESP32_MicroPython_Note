@@ -67,11 +67,12 @@ def MQTT_Send(tim):
 #执行WIFI连接函数并判断是否已经连接成功
 if WIFI_Connect():
 
-    SERVER = 'mq.tongxinmao.com'
+    MQTT_SERVER = 'mq.tongxinmao.com'
     PORT = 18830
     CLIENT_ID = '01Studio-ESP832' # 客户端ID
     TOPIC = '/public/01Studio/1' # TOPIC名称
-    client = MQTTClient(CLIENT_ID, SERVER, PORT)
+    client = MQTTClient(CLIENT_ID, MQTT_SERVER, PORT,
+                        )
     client.connect()
 
     #开启RTOS定时器，编号为-1,周期1000ms，执行socket通信接收任务
