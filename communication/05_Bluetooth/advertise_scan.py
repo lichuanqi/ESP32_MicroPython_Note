@@ -1,7 +1,6 @@
 from machine import Pin,Timer
 from time import sleep_ms
-from bluetooth import BLE, UUID
-from bluetooth import FLAG_NOTIFY, FLAG_WRITE
+import bluetooth
 
 from micropython import const
 
@@ -36,12 +35,28 @@ _IRQ_ENCRYPTION_UPDATE = const(28)
 _IRQ_GET_SECRET = const(29)
 _IRQ_SET_SECRET = const(30)
 
+_FLAG_BROADCAST = const(0x0001)
+_FLAG_READ = const(0x0002)
+_FLAG_WRITE_NO_RESPONSE = const(0x0004)
+_FLAG_WRITE = const(0x0008)
+_FLAG_NOTIFY = const(0x0010)
+_FLAG_INDICATE = const(0x0020)
+_FLAG_AUTHENTICATED_SIGNED_WRITE = const(0x0040)
+
+_FLAG_AUX_WRITE = const(0x0100)
+_FLAG_READ_ENCRYPTED = const(0x0200)
+_FLAG_READ_AUTHENTICATED = const(0x0400)
+_FLAG_READ_AUTHORIZED = const(0x0800)
+_FLAG_WRITE_ENCRYPTED = const(0x1000)
+_FLAG_WRITE_AUTHENTICATED = const(0x2000)
+_FLAG_WRITE_AUTHORIZED = const(0x4000)
+
 
 class ESP32_BLE():
     def __init__(self, name):
         self.name = name
 
-        self.ble = BLE()
+        self.ble = bluetooth.BLE()
         self.ble.active(True)
         self.ble.config(gap_name=name)
         self.ble.irq(self.__irq)
@@ -53,23 +68,21 @@ class ESP32_BLE():
         addr_type, addr = self.ble.config('mac')
         print("local address: %s"%str(addr))
 
-    def register(self):        
-        service_uuid = '6E400001-B5A3-F393-E0A9-E50E24DCCA9E'
-        reader_uuid = '6E400002-B5A3-F393-E0A9-E50E24DCCA9E'
-        sender_uuid = '6E400003-B5A3-F393-E0A9-E50E24DCCA9E'
-
-        services = (
-            (
-                UUID(service_uuid), 
-                (
-                    (UUID(sender_uuid), FLAG_NOTIFY), 
-                    (UUID(reader_uuid), FLAG_WRITE),
-                )
-            ), 
-        )
-
-        ((self.tx, self.rx,), ) = self.ble.gatts_register_services(services)
+    def register(self):
+        # Heart Rate
+        HR_UUID = bluetooth.UUID(0x180D)
+        HR_CHAR = (bluetooth.UUID(0x2A37), bluetooth.FLAG_READ | bluetooth.FLAG_NOTIFY,)
+        HR_SERVICE = (HR_UUID, (HR_CHAR,),)
         
+        # Nordic UART
+        UART_UUID = bluetooth.UUID('6E400001-B5A3-F393-E0A9-E50E24DCCA9E')
+        UART_TX = (bluetooth.UUID('6E400003-B5A3-F393-E0A9-E50E24DCCA9E'), bluetooth.FLAG_READ | bluetooth.FLAG_NOTIFY,)
+        UART_RX = (bluetooth.UUID('6E400002-B5A3-F393-E0A9-E50E24DCCA9E'), bluetooth.FLAG_WRITE,)
+        UART_SERVICE = (UART_UUID, (UART_TX, UART_RX,),)
+
+        SERVICES = (HR_SERVICE, UART_SERVICE,)
+        ( (hr,), (tx, rx,), ) = self.ble.gatts_register_services(SERVICES)
+
     def advertiser(self):
         local_name = bytes(self.name, 'utf-8')
         manufacturer_data = bytes('humi=20,temp=12', 'utf-8')
