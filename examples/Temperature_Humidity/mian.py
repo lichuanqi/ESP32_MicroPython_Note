@@ -3,39 +3,52 @@
 MQTT发布消息
 在OLED屏显示温湿度数据及消息发布状态
 """
-
-import network
 import time
-from machine import Pin,I2C,Timer
-import dht
 import ujson
+import network
+from machine import Pin,SoftI2C,ADC,Timer
+
+import dht
 from simple import MQTTClient
 from ssd1306 import SSD1306_I2C
+from bh1750 import BH1750
 
 # 参数
-WIFI_NAME = '601'
-WIFI_PWD = '1024601666'
+WIFI_NAME = 'WiWide-BurgerKing'
+WIFI_PWD = 'qwer1234'
 
-MQTT_CLIENT_ID = 'ESP32_0001'
-MQTT_BROKER = '192.168.31.99'
+MQTT_CLIENT_ID = 'ESP32_0002'
+MQTT_BROKER = '192.168.35.221'
 MQTT_PORT = '1883'
 MQTT_USER = ""
 MQTT_PASSWORD = ""
 MQTT_TOPIC = 'massage/environment'
 
-# 初始化蓝色板载灯
-LED_BLUE=Pin(2, Pin.OUT) #初始化WIFI指示灯
+# 板载蓝灯
+LED_BLUE=Pin(2, Pin.OUT)
 
-# 初始化DTH22
-DHT = dht.DHT22(Pin(15))
+# OLED模块
+i2c = SoftI2C(sda=Pin(19), scl=Pin(21))
+oled = SSD1306_I2C(128, 64, i2c, addr=0x3c)
+oled.fill(0)
+oled.text('init over', 0, 0)
+oled.show()
+
+# BH1750模块
+i2c_bh1750 = SoftI2C(scl=Pin(23), sda=Pin(22), freq=100000)
+bh1750 = BH1750(i2c_bh1750)
+# light = bh1750.luminance(mode=BH1750.ONCE_HIRES_1)
+# print('light: %s'%(light))
+
+# DHT22模块 
+d = dht.DHT22(Pin(15))
 time.sleep(1)
+d.measure()
+temp, hum = d.temperature(), d.humidity()
+print('temp: %s, hum: %s'%(temp, hum))
 
-# 初始化oled屏
-# i2c = I2C(sda=Pin(13), scl=Pin(12))
-# oled = SSD1306_I2C(128, 64, i2c, addr=0x3c)
 
-
-def WIFI_Connect():
+def Connect_WIFI():
     """WIFI连接函数
     
     蓝灯闪烁-正在尝试连接
@@ -47,12 +60,11 @@ def WIFI_Connect():
     start_time=time.time()              #记录时间做超时判断
 
     if not wlan.isconnected():
-        print('connecting to network...')
-        # wlan.connect('cpst', 'cpstzykj')
         wlan.connect(WIFI_NAME, WIFI_PWD)
+        oled.text('Connecting Wifi', 0, 15)
+        oled.show()
 
         while not wlan.isconnected():
-
             #LED闪烁提示
             LED_BLUE.value(1)
             time.sleep_ms(300)
@@ -61,62 +73,63 @@ def WIFI_Connect():
 
             #超时判断,10秒没连接成功判定为超时
             if time.time()-start_time > 10:
-                print('WIFI Connected Timeout!')
+                oled.text('Timeout!', 0, 30)
                 break
 
     if wlan.isconnected():
         LED_BLUE.value(0)
-        print('WIFI Connected:', wlan.ifconfig())
+        oled.text('Success', 0, 30)
+        oled.show()
 
 
-def MQTT_connect():
+def connect_MQTT():
     """连接mqt"""
     global mqttclient
     
     mqttclient = MQTTClient(MQTT_CLIENT_ID, MQTT_BROKER, MQTT_PORT)
     mqttclient.connect()
-    print('MQTT connected')
+    oled.text('MQTT connected', 0, 45)
+    oled.show()
 
 
-def publish_temp(tim):
-    # 读取温湿度数据
-    DHT.measure()
-    temp, hum = DHT.temperature(), DHT.humidity()
+def measure_once(tim):    
+    # 光强度数据
+    light = bh1750.luminance(mode=BH1750.ONCE_HIRES_1)
+    # 温湿度数据
+    d.measure()
+    temp, hum = d.temperature(), d.humidity()
     
     # 像主题发送数据
     message = ujson.dumps({
         "temp": temp,
         "hum": hum,
+        "light": light,
     })
     try:
         mqttclient.publish(MQTT_TOPIC, message)
-        publish_status = 'True'
-        print('publish success')
+        state = 'success'
         
         # 亮灯1s
         LED_BLUE.value(1)
         time.sleep(1)
         LED_BLUE.value(0)
     except:
-        publish_status = 'False'
-        print('publish failed')
-
-    # 屏幕显示温湿度及发送状态
-    # oleDHT.fill(0)
-    # oleDHT.text('temp: ' + str(temp), 0, 0)
-    # oleDHT.text('humidity:' + str(hum), 0, 20)
-    # oleDHT.text('Published:' + str(publish_status), 0, 38)
-    # oleDHT.show()
+        state = 'failed'
+    
+    oled.fill(0)
+    oled.text('Light: ' + str(light), 0, 0)
+    oled.text('Temp: ' + str(temp), 0, 15)
+    oled.text('Humi: ' + str(hum), 0, 30)
+    oled.text('State: ' + state, 0, 45)
+    oled.show()
 
 
 if __name__ == '__main__':
-    # 连接wifi
-    WIFI_Connect()
     
-    # 连接MQTT
-    MQTT_connect()
+    Connect_WIFI()
+    connect_MQTT()
 
     # 定时器
     tim = Timer(-1)
-    publish_temp(tim)
-    # tim.init(period=30000, mode=Timer.PERIODIC,callback=publish_temp)
+    # measure_once(tim)
+    tim.init(period=10000, mode=Timer.PERIODIC,callback=measure_once)
