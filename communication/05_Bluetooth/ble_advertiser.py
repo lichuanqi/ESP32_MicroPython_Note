@@ -2,7 +2,7 @@
 #
 # The sensor's local value updates every second, and it will notify
 # any connected central every 10 seconds.
-
+import machine
 import bluetooth
 import random
 import struct
@@ -10,6 +10,10 @@ import time
 from ble_advertising import advertising_payload
 
 from micropython import const
+
+DEVICE_UUID = machine.unique_id()
+DEVICE_UUID_STR = ''.join(['{:02x}'.format(b) for b in DEVICE_UUID])
+print('device_uuid_str: %s'%DEVICE_UUID_STR)
 
 _IRQ_CENTRAL_CONNECT = const(1)
 _IRQ_CENTRAL_DISCONNECT = const(2)
@@ -76,12 +80,13 @@ class BLETemperature:
                     self._ble.gatts_indicate(conn_handle, self._handle)
 
     def _advertise(self, interval_us=500000):
+        print('start advertise')
         self._ble.gap_advertise(interval_us, adv_data=self._payload)
 
 
 def demo():
     ble = bluetooth.BLE()
-    temp = BLETemperature(ble, name='esp32_0001')
+    temp = BLETemperature(ble, name=DEVICE_UUID_STR)
 
     t = 25
     i = 0
