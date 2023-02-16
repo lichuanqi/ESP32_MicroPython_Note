@@ -13,7 +13,8 @@ from micropython import const
 
 DEVICE_UUID = machine.unique_id()
 DEVICE_UUID_STR = ''.join(['{:02x}'.format(b) for b in DEVICE_UUID])
-print('device_uuid_str: %s'%DEVICE_UUID_STR)
+DEVICE_NAME = 'esp32_' + DEVICE_UUID_STR
+print('DEVICE_NAME: %s'%DEVICE_NAME)
 
 _IRQ_CENTRAL_CONNECT = const(1)
 _IRQ_CENTRAL_DISCONNECT = const(2)
@@ -86,7 +87,7 @@ class BLETemperature:
 
 def demo():
     ble = bluetooth.BLE()
-    temp = BLETemperature(ble, name=DEVICE_UUID_STR)
+    temp = BLETemperature(ble, name=DEVICE_NAME)
 
     t = 25
     i = 0
